@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 이미지 분석 서비스</title>
+    <style>
+        /* 다크 모드 미니멀 테마 */
+        :root {
+            --bg-color: #121212;
+            --container-bg: #1e1e1e;
+            --text-color: #f0f0f0;
+            --accent-color: #007bff;
+            --error-color: #ff4d4d;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            background-color: var(--container-bg);
+            width: 100%;
+            max-width: 480px;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+
+        h2 { font-weight: 300; margin-bottom: 25px; }
+
+        .drop-zone {
+            border: 2px dashed #444;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: border 0.3s;
+        }
+        .drop-zone:hover { border-color: var(--accent-color); }
+
+        #previewImg {
+            max-width: 100%;
+            max-height: 250px;
+            border-radius: 8px;
+            display: none;
+            margin: 15px auto;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            background: #2a2a2a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: #fff;
+            margin-bottom: 20px;
+            box-sizing: border-box;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background-color: var(--accent-color);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #444; cursor: not-allowed; }
+
+        /* 분석 중 로딩 상태 */
+        .loading-container {
+            display: none;
+            margin: 20px 0;
+        }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: var(--accent-color);
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        #resultArea {
+            margin-top: 25px;
+            padding: 15px;
+            background: #252525;
+            border-radius: 8px;
+            text-align: left;
+            display: none;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            border-left: 4px solid var(--accent-color);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>AI Vision Analyzer</h2>
+    
+    <div class="drop-zone" onclick="document.getElementById('fileInput').click()">
+        <p id="hintText">이미지를 선택하거나 클릭하세요</p>
+        <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFile(event)">
+        <img id="previewImg" alt="미리보기">
+    </div>
+
+    <input type="text" id="questionBox" placeholder="무엇이 궁금하신가요?">
+    
+    <button id="runBtn" onclick="executeAnalysis()">분석하기</button>
+
+    <div class="loading-container" id="loader">
+        <div class="spinner"></div>
+        <p>AI가 분석 중입니다...</p>
+    </div>
+
+    <div id="resultArea"></div>
+</div>
+
+<script>
+    /**
+     * 파일 선택 시 미리보기를 출력하는 함수
+     */
+    function handleFile(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = document.getElementById('previewImg');
+                const hint = document.getElementById('hintText');
+                img.src = e.target.result;
+                img.style.display = 'block';
+                hint.style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+
+    /**
+     * 서버에 분석을 요청하는 메인 함수
+     */
+    async function executeAnalysis() {
+        const fileInput = document.getElementById('fileInput');
+        const questionBox = document.getElementById('questionBox');
+        const runBtn = document.getElementById('runBtn');
+        const loader = document.getElementById('loader');
+        const resultArea = document.getElementById('resultArea');
+
+        if (!fileInput.files[0]) {
+            alert("이미지 파일을 먼저 선택해주세요.");
+            return;
+        }
+
+        // 상태 초기화
+        runBtn.disabled = true;
+        loader.style.display = 'block';
+        resultArea.style.display = 'none';
+
+        const formData = new FormData();
+        formData.append('image', fileInput.files[0]);
+        formData.append('question', questionBox.value);
+
+        try {
+            // Node.js 프록시 서버로 요청 전송
+            const response = await fetch('/proxy/analyze', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                resultArea.innerHTML = "<strong>분석 결과:</strong><br>" + data.result;
+            } else {
+                resultArea.innerHTML = "<span style='color:var(--error-color)'>오류: " + data.message + "</span>";
+            }
+            resultArea.style.display = 'block';
+
+        } catch (error) {
+            console.error("분석 실패:", error);
+            alert("서버 연결에 실패했습니다.");
+        } finally {
+            runBtn.disabled = false;
+            loader.style.display = 'none';
+        }
+    }
+</script>
+
+</body>
+</html>
