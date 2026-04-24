@@ -4,3 +4,4 @@ ollama
 openai
 python-multipart
 python-dotenv
+mysql-connector-python
